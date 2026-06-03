@@ -93,6 +93,14 @@ def compare_approaches(
         rows.append({"Approach": "Tier 2 — Product (calibrated)", **m})
 
     comparison = pd.DataFrame(rows).set_index("Approach")
+    
+    # Round metrics for cleaner output
+    for col in ["MAE", "RMSE", "Median AE"]:
+        if col in comparison.columns:
+            comparison[col] = comparison[col].round(0).astype(int)
+    if "MAPE (%)" in comparison.columns:
+        comparison["MAPE (%)"] = comparison["MAPE (%)"].round(2)
+
     print("\n" + "=" * 80)
     print("COMPARISON SUMMARY")
     print("=" * 80)

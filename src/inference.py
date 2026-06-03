@@ -281,6 +281,7 @@ def _save_separate_outputs(results: pd.DataFrame) -> None:
         if col in results.columns:
             out = results[["shopId", "itemId", "modelId", "date", col]].copy()
             out = out.rename(columns={col: TARGET})
+            out[TARGET] = out[TARGET].round(0).astype(int)
             path = os.path.join(OUTPUT_DIR, name)
             out.to_csv(path, index=False)
             print(f"  Saved {name}")
