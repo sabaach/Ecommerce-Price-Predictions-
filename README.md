@@ -43,7 +43,8 @@ This will:
 ```bash
 python main.py --mode predict
 ```
-Generates predictions for the test file and saves to `outputs/predictions_final.csv`.
+Generates predictions for the test file and saves to `outputs/predictions_final.csv`. 
+*Note: All final price predictions are rounded to the nearest integer as IDR prices do not use decimals.*
 
 ### 4. Full Pipeline
 ```bash
@@ -53,28 +54,24 @@ Runs both training + inference.
 
 ---
 
-## 📁 Project Structure
+## 📈 Results & Findings
 
-```
-MrScrapperChallenge/
-├── Files/                              # Data files
-│   ├── ecommerce_price_prediction-train.csv
-│   └── ecommerce_price_prediction-test-3-days.csv
-├── src/
-│   ├── config.py                       # Constants, paths, hyperparameters
-│   ├── data_preprocessing.py           # Data loading & cleaning
-│   ├── feature_engineering.py          # Feature creation pipeline
-│   ├── model_global.py                 # Tier 1 — Global Model
-│   ├── model_product.py               # Tier 2 — Product Model
-│   ├── anchor_calibration.py           # Multi-level anchor calibration
-│   ├── evaluate.py                     # Metrics & reporting
-│   └── inference.py                    # Prediction pipeline
-├── models/                             # Saved model artifacts
-├── outputs/                            # Prediction CSVs
-├── main.py                             # CLI entry point
-├── requirements.txt                    # Python dependencies
-└── README.md                           # This file
-```
+### Validation Metrics
+Based on our simulated outage day validation (holding out the last day and using 100 anchor samples), the Product Model with calibration yields the best performance.
+
+| Approach | MAE (IDR) | RMSE (IDR) | MAPE (%) | Median AE (IDR) |
+|----------|-----------|------------|----------|-----------------|
+| Tier 1 — Global (no calibration) | 151,635 | 1,251,789 | 0.48% | 10,785 |
+| Tier 1 — Global (calibrated) | 136,939 | 1,241,876 | 0.44% | 1,499 |
+| Tier 2 — Product (no calibration)| 121,412 | 1,240,025 | 0.39% | 4,829 |
+| **Tier 2 — Product (calibrated)**| **116,330** | **1,240,285** | **0.36%** | **1,070** |
+
+### Analysis & Insights
+- **Tier 2 Outperforms Tier 1:** As expected, incorporating shop and product-specific history heavily improves predictions. The Product Model significantly drops the MAE (by ~30,000 IDR compared to the Global Model).
+- **Anchor Calibration is Crucial:** For both tiers, using the 100 anchor samples significantly improves the Median Absolute Error (AE). For the Product Model, Median AE drops from 4,829 IDR down to 1,070 IDR after calibration.
+- **When to Use Each Approach:**
+  - **Tier 2 (Product Model)** should be the primary model in production for products that have sufficient historical data (e.g., ≥5 observations).
+  - **Tier 1 (Global Model)** serves as a robust fallback for cold-start entities (new shops or products) where historical stats are unavailable.
 
 ---
 
@@ -82,7 +79,7 @@ MrScrapperChallenge/
 
 ### Temporal Features
 - `day_of_week`, `day_of_month`, `month`, `is_weekend`, `hour`
-- `days_since_start` — numeric progression
+- `days_since_start` — numeric progression to capture inflation or overall trend.
 
 ### Entity-Level Historical Features
 - **Model-level**: `price_mean`, `price_std`, `price_last`, `price_momentum`, `price_cv`
@@ -95,7 +92,6 @@ MrScrapperChallenge/
 - `has_promotion` = promotionId > 0
 - `shop_engagement_score` = shop_rating × log(shop_follower_count)
 - `price_vs_cat_ratio`, `price_vs_shop_ratio` — relative positioning
-- Log transforms for skewed columns
 
 ### Brand Encoding
 - Frequency encoding + label encoding
@@ -117,48 +113,42 @@ This approach allows the system to detect and correct for day-specific pricing s
 
 ---
 
-## 📊 Validation Methodology
+## 📝 Preprocessing & Output Formatting Notes
 
-- **Time-based split**: Hold out the last day entirely as validation set
-- **Simulated anchor set**: Random 100 samples from the validation day
-- **Metrics**: MAE, RMSE, MAPE reported before and after anchor calibration
-- **Per-category breakdown**: Detailed metrics per product category
-
-This mirrors the real test conditions where an entire day's data is missing.
-
----
-
-## 🔍 Approach Comparison: When to Use Each
-
-### Tier 1 — Global Model
-✅ Better for:
-- Products with sparse/no history (cold start)
-- New shops or categories
-- Quick baseline production deployment
-
-### Tier 2 — Product Model
-✅ Better for:
-- Products with sufficient history (≥5 observations)
-- Capturing shop-specific pricing strategies
-- Maximum prediction accuracy on known products
-
-### Production Recommendation
-Use **Tier 2 as primary** with **Tier 1 as fallback** for cold-start entities. This is implemented via the hierarchical fallback in `model_product.py`.
+- Prices are in IDR smallest unit (e.g., 41900000 = Rp 41,900,000).
+- **Rounding:** In the final output (`predictions_final.csv`, `predictions_global.csv`, `predictions_product.csv`), all predicted prices are rounded to the nearest whole integer (`int`). This is aligned with the original format of the e-commerce data to avoid confusing decimal outputs like `7485332.982379999`.
+- `stock` and `normal_stock` dropped (99% null).
+- Target is log-transformed during training (`np.log1p`) → exponentiated for final predictions (`np.expm1`).
+- Outliers capped at 1st/99th percentile.
 
 ---
 
-## 🔁 Reproducibility
+## 🔁 Reproducibility & Structure
 
 - **Random seed**: 42 (set in `src/config.py`)
 - **Python**: 3.10+
 - **Dependencies**: Pinned in `requirements.txt`
-- All experiments are deterministic given the same seed
+- All experiments are deterministic given the same seed.
 
----
+### 📁 Project Structure
 
-## 📝 Notes
-
-- Prices are in IDR smallest unit (e.g., 41900000 = Rp 41,900,000)
-- `stock` and `normal_stock` dropped (99% null)
-- Target is log-transformed during training → expm1 for final predictions
-- Outliers capped at 1st/99th percentile
+```
+MrScrapperChallenge/
+├── Files/                              # Data files
+│   ├── ecommerce_price_prediction-train.csv
+│   └── ecommerce_price_prediction-test-3-days.csv
+├── src/
+│   ├── config.py                       # Constants, paths, hyperparameters
+│   ├── data_preprocessing.py           # Data loading & cleaning
+│   ├── feature_engineering.py          # Feature creation pipeline
+│   ├── model_global.py                 # Tier 1 — Global Model
+│   ├── model_product.py               # Tier 2 — Product Model
+│   ├── anchor_calibration.py           # Multi-level anchor calibration
+│   ├── evaluate.py                     # Metrics & reporting
+│   └── inference.py                    # Prediction pipeline
+├── models/                             # Saved model artifacts
+├── outputs/                            # Prediction CSVs (predictions_final.csv)
+├── main.py                             # CLI entry point
+├── requirements.txt                    # Python dependencies
+└── README.md                           # This file
+```
