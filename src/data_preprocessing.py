@@ -54,6 +54,7 @@ def load_test(path: str = TEST_CSV) -> tuple[pd.DataFrame, pd.DataFrame]:
     anchors[LOG_TARGET] = np.log1p(anchors[TARGET])
 
     # For prediction rows, only capturedAt and ID cols are available
+    to_predict["capturedAt_orig"] = to_predict[DATETIME_COL].copy()
     to_predict[DATETIME_COL] = pd.to_datetime(to_predict[DATETIME_COL])
     to_predict["date"] = to_predict[DATETIME_COL].dt.date
 
