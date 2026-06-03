@@ -265,6 +265,9 @@ def _build_output(
     global_median = results["pred_final"].median()
     output_df[TARGET] = output_df[TARGET].fillna(global_median)
 
+    # Round to integers — prices are in whole currency units (IDR)
+    output_df[TARGET] = output_df[TARGET].round(0).astype(int)
+
     print(f"  Filled {filled} predictions, fallback applied to rest")
     return output_df
 
